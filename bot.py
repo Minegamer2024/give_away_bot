@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Literal
 import sqlite3
 import asyncio
+from art import text2art
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -18,8 +19,10 @@ cr = db.cursor()
 cr_member = db_member.cursor()
 @client.event
 async def on_ready():
+    art_ready = text2art("Asia studio")
     await client.tree.sync()
     await client.change_presence(activity=discord.Game(name="Giveaways"))
+    print(art_ready)
     print(f"ready {client.user}")
 @client.tree.command(name="role", description="لأضافة الرتبة التي سيسمح لها بأستخدام البوت")
 async def role_member(interaction: discord.Interaction, الرتبة: discord.Role, الوظية:Literal["اضافة","ازالة"]):
@@ -70,46 +73,44 @@ async def giveaway(interaction: discord.Interaction, الجائزة: str, الو
             if عدد_الفائزين >= 1:
                 avatar = user.avatar.url
                 member = []
-                button = discord.ui.Button(label="🎉 انضمام", style=discord.ButtonStyle.primary)
-                remove = discord.ui.Button(label="خروج", style=discord.ButtonStyle.red)
+                button = discord.ui.Button(label="انضمام", style=discord.ButtonStyle.primary, emoji="🎉")
                 embed = discord.Embed(
                     title=الوصف,
                     color=discord.Colour.gold()
                 )
                 embed.set_author(
-                    name=الجائزة,
+                    name="الجائزة 🎁",
                     icon_url=avatar
                 )
                 embed.add_field(
-                    name="الفائزين",
+                    name="الفائزين 🏆",
                     value="لا يوجد اي فائز حتى الان",
                     inline=False
                 )
                 embed.add_field(
-                    name="المستضيف",
+                    name="المستضيف 😎",
                     value=user.mention,
                     inline=False
                 )
                 embed.add_field(
-                    name="عدد الفائزين",
+                    name="عدد الفائزين 🥇",
                     value=عدد_الفائزين,
                     inline=False
                 )
                 embed.add_field(
-                    name="عدد المشاركين",
+                    name="عدد المشاركين 👥",
                     value=len(member),
                     inline=False
                     )
                 embed.add_field(
-                    name="المدة",
+                    name="المدة ⏳",
                     value=f"{المدة} {نوع_المدة}"
                 )
                 embed.set_thumbnail(
                     url=interaction.guild.icon
                 )
-                view = discord.ui.View()
+                view = discord.ui.View(timeout=None)
                 view.add_item(button)
-                view.add_item(remove)
                 async def button_callback(interaction: discord.Interaction):
                     if interaction.user not in member:
                         member.append(interaction.user)
@@ -119,20 +120,22 @@ async def giveaway(interaction: discord.Interaction, الجائزة: str, الو
                         cr_member.execute(f"insert into member_give(members_id, server_id) values({interaction.user.id}, {interaction.guild.id})")
                         db_member.commit()
                     else:
-                        await interaction.response.send_message(f"لقد انضممت للجيف اوي بالفعل يا {interaction.user.mention}", ephemeral=True)
-                async def remove_callback(interaction: discord.Interaction):
-                    if interaction.user in member:
-                        member.remove(interaction.user)
-                        embed.set_field_at(3, name="عدد المشاركين", value=len(member), inline=False)
-                        await interaction.response.edit_message(embed=embed, view=view)
-                        await interaction.followup.send("لقد خرجت من الجيف اوي", ephemeral=True)
-                        cr_member.execute(f"delete from member_give where server_id = {interaction.guild.id}")
-                        db_member.commit()
-                    else:
-                        await interaction.response.send_message("انت خارج الجيف اوي بالفعل", ephemeral=True)
+                        remove_view = discord.ui.View(timeout=None)
+                        remove = discord.ui.Button(label="خروج", style=discord.ButtonStyle.red, emoji="🚪")
+                        async def remove_callback(interaction: discord.Interaction):
+                            if interaction.user in member:
+                                member.remove(interaction.user)
+                                await interaction.response.edit_message(content="لقد خرجت من الجيف اوي", view=None)
+                                embed.set_field_at(3, name="عدد المشاركين", value=len(member), inline=False)
+                                await interaction.followup.edit_message(message_id=give_message.id, embed=embed, view=view)
+                                cr_member.execute(f"delete from member_give where members_id = {interaction.user.id} and server_id = {interaction.guild.id}")
+                                db_member.commit()
+                        remove_view.add_item(remove)
+                        remove.callback = remove_callback
+                        await interaction.response.send_message(f"لقد انضممت للجيف بالفعل اوي يا {interaction.user.mention} فا هل تريد الخروج",view=remove_view, ephemeral=True)
                 button.callback = button_callback
-                remove.callback = remove_callback
-                await interaction.response.send_message(embed=embed, view=view)
+                give_message = await interaction.response.send_message(embed=embed, view=view)
+                give_message = await interaction.original_response()
                 if نوع_المدة == "ثواني":
                     times = timedelta(seconds=المدة)
                 elif نوع_المدة == "دقائق":
@@ -145,18 +148,17 @@ async def giveaway(interaction: discord.Interaction, الجائزة: str, الو
                 if len(member) > 0:
                     if عدد_الفائزين >= len(member):
                         winner = random.sample(member, k=len(member))
-                        embed.set_field_at(2, name="عدد الفائزين", value=len(member), inline=False)
+                        embed.set_field_at(2, name="عدد الفائزين 🥇", value=len(member), inline=False)
                     else:
                         winner = random.sample(member, k=عدد_الفائزين)
                     winner_mention = " ".join([w.mention for w in winner])
-                    embed.set_field_at(0, name="الفائزين", value=winner_mention, inline=False)
+                    embed.set_field_at(0, name="الفائزين 🏆", value=winner_mention, inline=False)
                     message = await interaction.followup.send(f"لقد فاز {winner_mention} ب {الجائزة}")
                     await message.add_reaction("🎉")
                 else:
-                    embed.set_field_at(0, name="الفائزون", value="لا يوجد اي فائز", inline=False)
+                    embed.set_field_at(0, name="الفائزين 🏆", value="لا يوجد اي فائز", inline=False)
                     await interaction.followup.send("لا يوجد فائز")
                 button.disabled = True
-                remove.disabled = True
                 await interaction.edit_original_response(embed=embed, view=view)
             else:
                 await interaction.response.send_message("لا يمكنك استخدام عدد اقل من 1 في عدد الفائزين", ephemeral=True)
@@ -208,4 +210,4 @@ async def member_join(interaction: discord.Interaction):
             await interaction.response.send_message("اسف لكن لا يمكنك استخدام هذا الامر الان", ephemeral=True)
         else:
             await interaction.response.send_message("اسف لكن انت لا تملك الصلاحية لأستخدام هذا الامر", ephemeral=True)       
-client.run("your_bot_token")
+client.run("add_bot_token")
